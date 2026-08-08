@@ -1,9 +1,11 @@
 # ============================================================================
 # btseg-autobest-unet - reference configuration
 #
-# This file documents the exact settings used to produce every number in
-# README.md and results/. The scripts in src/ carry these values as module
-# level constants; this file is the single human-readable source of truth.
+# This file documents the settings used to produce the numbers in README.md
+# and results/. The scripts in src/ carry these values as module-level
+# constants and do NOT parse this file, so it is documentation, not
+# configuration: if you change a value here, nothing happens. Every entry
+# below was read back from the code on 2026-08-08 and matches it.
 #
 # Only paths are read from the environment, so that no machine-specific
 # location is baked into the code:
@@ -15,7 +17,12 @@
 # ============================================================================
 
 data:
-  # BraTS 2020 training set (369 cases). Not redistributed - see README.
+  # BraTS 2020 training set. Not redistributed - see README.
+  # 369 case folders ship with the dataset, but only 368 are usable: in
+  # BraTS20_Training_355 the segmentation is named W39_1998.09.19_Segm.nii
+  # instead of BraTS20_Training_355_seg.nii, so build_datalist() cannot pair
+  # it and skips the case with a printed warning. Every number in results/
+  # is therefore over 368 cases.
   root: ${BRATS_DATA_ROOT}
   modalities: [flair, t1, t1ce, t2]
   # BraTS label ids {0,1,2,4} are remapped to contiguous {0,1,2,3}
@@ -28,7 +35,7 @@ data:
 
 split:
   seed: 42
-  val_fraction: 0.2          # 295 train / 74 val, case-level, no patient overlap
+  val_fraction: 0.2          # 294 train / 74 val of 368 usable, no patient overlap
   folds: 1                   # single fixed split, not cross-validated
 
 preprocessing:
@@ -45,16 +52,28 @@ augmentation:
     num_samples: 2
   rand_flip_prob: 0.5         # applied per spatial axis
   rand_rotate90_prob: 0.5
-  rand_affine_prob: 0.2
+  rand_affine_prob: 0.3
 
 training:
   max_epochs: 100
   early_stop_patience: 20
   min_delta: 0.0
-  loss: DiceCELoss            # softmax, one-hot targets, include_background=False
+
+  # DiceCELoss(include_background=True, to_onehot_y=True, softmax=True)
+  # Note: the background class IS included in the loss.
+  loss: DiceCELoss
+  loss_include_background: true
+
   optimizer: AdamW
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
   scheduler: CosineAnnealing
-  batch_size: 2               # crops per step
+  scheduler_eta_min: 1.0e-6
+
+  # Two different quantities, easily confused:
+  dataloader_batch_size: 1    # volumes per optimiser step
+  crops_per_volume: 2         # RandCropByPosNegLabeld num_samples -> 2 crops/step
+
   sw_batch_size: 2            # sliding-window inference batch
   roi: [128, 128, 128]
   num_workers: 4
@@ -84,8 +103,22 @@ search:
     depth_range: [3, 5]         # number of encoder levels
     strides: fixed_2            # stride 2 between every level
 
-  proxy_epochs: 6               # short proxy training per candidate
-  rerank_top_k: 10              # top candidates retrained for the final ranking
+  # IMPORTANT: the search does not run on the full training split. Candidates
+  # are ranked on a fixed 30% subset of the 294 training cases, which is the
+  # main reason proxy Dice (0.30-0.55) sits so far below converged Dice.
+  search_train_fraction: 0.30
+
+  # Four stages, each with its own budget:
+  anchor_epochs: 2              # short proxy run to place the hand-designed anchors
+  tune_proxy_epochs: 6          # lambda/mu grid sweep
+  tune_iters: 3
+  tune_top_k: 6
+  final_proxy_epochs: 10        # dense search at the chosen (lambda, mu)
+  final_iters: 6
+  final_top_k: 8
+  rerank_proxy_epochs: 6        # top-k re-evaluated on the FULL training split
+  rerank_top_k: 10
+  full_epochs: 100              # budget for the emitted training script
 
   # Winner, written to results/search/best_spec.json
   best_spec:
