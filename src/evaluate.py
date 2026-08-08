@@ -14,8 +14,11 @@ from monai.transforms import (
     AsDiscrete,
 )
 from monai.networks.nets import UNet
-from monai.metrics import DiceMetric
 from monai.inferers import sliding_window_inference
+
+# Reuse the exact metric definitions the training runs used, so that anything
+# printed here is directly comparable to results/ and to the README tables.
+import train_variants as base
 
 
 # ----------------- PATHS -----------------
@@ -173,11 +176,14 @@ def main():
 
     model = load_model(device)
 
-    dice_metric = DiceMetric(include_background=False, reduction="mean")
     post_pred = AsDiscrete(argmax=True, to_onehot=NUM_CLASSES)
     post_label = AsDiscrete(to_onehot=NUM_CLASSES)
 
-    dice_metric.reset()
+    keys = ["class_dice_1", "class_dice_2", "class_dice_3",
+            "wt_dice", "tc_dice", "et_dice"]
+    totals = {k: 0.0 for k in keys}
+    n_cases = 0
+
     with torch.no_grad():
         for i, batch in enumerate(val_loader):
             images = batch["image"].to(device)
@@ -196,11 +202,36 @@ def main():
             preds_proc = [post_pred(p) for p in preds_list]
             labs_proc  = [post_label(l) for l in labs_list]
 
-            dice_metric(y_pred=preds_proc, y=labs_proc)
+            for pred_onehot, gt_onehot in zip(preds_proc, labs_proc):
+                d = base.compute_class_region_dice(pred_onehot, gt_onehot)
+                for k in keys:
+                    totals[k] += d[k]
+                n_cases += 1
 
-    mean_dice = dice_metric.aggregate().item()
-    dice_metric.reset()
-    print(f"\nValidation mean Dice over {len(val_dicts)} cases: {mean_dice:.4f}")
+    if n_cases == 0:
+        raise RuntimeError("No cases were evaluated; check DATA_ROOT and the validation list.")
+
+    avg = {k: totals[k] / n_cases for k in keys}
+    mean_class = (avg["class_dice_1"] + avg["class_dice_2"] + avg["class_dice_3"]) / 3.0
+    mean_region = (avg["wt_dice"] + avg["tc_dice"] + avg["et_dice"]) / 3.0
+
+    # Two conventions are in circulation and they do not agree, so both are
+    # printed and labelled against the README columns.
+    print(f"\nEvaluated {n_cases} cases from {VAL_TXT}\n")
+    print("Per-class Dice (raw labels: 1 necrotic core, 2 oedema, 3 enhancing)")
+    print(f"  class 1 : {avg['class_dice_1']:.4f}")
+    print(f"  class 2 : {avg['class_dice_2']:.4f}")
+    print(f"  class 3 : {avg['class_dice_3']:.4f}")
+    print(f"  mean class Dice  : {mean_class:.4f}   <- README column 'Mean class'")
+    print()
+    print("Per-region Dice (nested BraTS regions)")
+    print(f"  WT : {avg['wt_dice']:.4f}")
+    print(f"  TC : {avg['tc_dice']:.4f}")
+    print(f"  ET : {avg['et_dice']:.4f}")
+    print(f"  mean region Dice : {mean_region:.4f}   <- README column 'Mean region'")
+    print()
+    print("Note: a region empty in both prediction and ground truth scores 1.0,")
+    print("following the BraTS convention. See the README for which cases this affects.")
 
 
 if __name__ == "__main__":
