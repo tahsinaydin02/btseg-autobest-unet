@@ -1,4 +1,5 @@
 import os
+import json
 import torch
 from monai.data import Dataset, DataLoader, decollate_batch
 from monai.transforms import (
@@ -31,8 +32,23 @@ DATA_ROOT = os.environ.get(
 # Validation split written by the training script (val_cases_seed42.txt).
 VAL_TXT = os.environ.get("BTSEG_VAL_TXT", "val_cases_seed42.txt")
 
-# Checkpoint to evaluate (see the GitHub Release for the published weights).
-MODEL_PATH = os.environ.get("BTSEG_CKPT", "brats2020_unet_best_80_20.pth")
+# Checkpoint to evaluate. Trained checkpoints are published under the v1.0
+# release; the default below matches the filename written by train_variants.py
+# for the baseline anchor.
+MODEL_PATH = os.environ.get("BTSEG_CKPT", "brats2020_unet_UNet-Baseline_best_80_20.pth")
+
+# Architecture of that checkpoint. A state_dict carries no architecture, so it
+# has to be supplied. Defaults to the baseline anchor; override for any other
+# model, e.g. for UNet-AutoBest:
+#     export BTSEG_SPEC='{"channels":[24,32,80],"strides":[2,2],"num_res_units":2}'
+# and additionally set BTSEG_DSCONV=1 for the depthwise-separable variants.
+SPEC = json.loads(
+    os.environ.get(
+        "BTSEG_SPEC",
+        '{"channels": [32, 64, 128, 256, 512], "strides": [2, 2, 2, 2], "num_res_units": 2}',
+    )
+)
+DSCONV = os.environ.get("BTSEG_DSCONV", "0") == "1"
 
 NUM_CLASSES = 4  # {0,1,2,3}
 
@@ -109,13 +125,36 @@ def load_model(device):
         spatial_dims=3,
         in_channels=4,
         out_channels=NUM_CLASSES,
-        channels=(32, 64, 128, 256, 512),
-        strides=(2, 2, 2, 2),
-        num_res_units=2,
-    ).to(device)
+        channels=tuple(SPEC["channels"]),
+        strides=tuple(SPEC["strides"]),
+        num_res_units=int(SPEC["num_res_units"]),
+    )
+
+    if DSCONV:
+        # The depthwise-separable models store different parameter names
+        # (conv.depthwise.* / conv.pointwise.*), so the substitution has to
+        # happen before the state_dict is loaded.
+        from train_autobest_dsconv import _replace_conv3d_with_dsconv
+
+        model = _replace_conv3d_with_dsconv(model)
+
+    model = model.to(device)
 
     state_dict = torch.load(MODEL_PATH, map_location=device)
-    model.load_state_dict(state_dict)
+    if isinstance(state_dict, dict) and "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+
+    try:
+        model.load_state_dict(state_dict)
+    except RuntimeError as err:
+        raise RuntimeError(
+            f"Could not load {MODEL_PATH} into the architecture given by "
+            f"BTSEG_SPEC={SPEC} (BTSEG_DSCONV={int(DSCONV)}).\n"
+            "A checkpoint only stores weights, so the architecture must match "
+            "exactly. See the release notes for the spec of each published "
+            f"checkpoint.\n\nOriginal error:\n{err}"
+        ) from err
+
     model.eval()
     return model
 
