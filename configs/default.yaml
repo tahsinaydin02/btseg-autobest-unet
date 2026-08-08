@@ -1,0 +1,134 @@
+# ============================================================================
+# btseg-autobest-unet - reference configuration
+#
+# This file documents the exact settings used to produce every number in
+# README.md and results/. The scripts in src/ carry these values as module
+# level constants; this file is the single human-readable source of truth.
+#
+# Only paths are read from the environment, so that no machine-specific
+# location is baked into the code:
+#
+#   BRATS_DATA_ROOT   root of MICCAI_BraTS2020_TrainingData   (required)
+#   BTSEG_CKPT        checkpoint to evaluate                  (evaluate.py)
+#   BTSEG_VAL_TXT     validation split listing                (evaluate.py)
+#   BTSEG_FIG_OUT     figure output directory                 (make_figures.py)
+# ============================================================================
+
+data:
+  # BraTS 2020 training set (369 cases). Not redistributed - see README.
+  root: ${BRATS_DATA_ROOT}
+  modalities: [flair, t1, t1ce, t2]
+  # BraTS label ids {0,1,2,4} are remapped to contiguous {0,1,2,3}
+  label_map: {0: 0, 1: 1, 2: 2, 4: 3}
+  # Evaluation follows the BraTS convention of nested tumour regions:
+  #   WT = whole tumour        = labels {1,2,3}
+  #   TC = tumour core         = labels {1,3}
+  #   ET = enhancing tumour    = label  {3}
+  regions: [WT, TC, ET]
+
+split:
+  seed: 42
+  val_fraction: 0.2          # 295 train / 74 val, case-level, no patient overlap
+  folds: 1                   # single fixed split, not cross-validated
+
+preprocessing:
+  orientation: RAS
+  spacing: [1.0, 1.0, 1.0]
+  normalize: nonzero_z_score  # NormalizeIntensityd(nonzero=True, channel_wise=True)
+  crop_foreground: true
+
+augmentation:
+  rand_crop_by_pos_neg_label:
+    spatial_size: [128, 128, 128]
+    pos: 1
+    neg: 1
+    num_samples: 2
+  rand_flip_prob: 0.5         # applied per spatial axis
+  rand_rotate90_prob: 0.5
+  rand_affine_prob: 0.2
+
+training:
+  max_epochs: 100
+  early_stop_patience: 20
+  min_delta: 0.0
+  loss: DiceCELoss            # softmax, one-hot targets, include_background=False
+  optimizer: AdamW
+  scheduler: CosineAnnealing
+  batch_size: 2               # crops per step
+  sw_batch_size: 2            # sliding-window inference batch
+  roi: [128, 128, 128]
+  num_workers: 4
+  seed: 42
+  strict_gpu_determinism: false   # cudnn.benchmark left on for speed
+
+# ---------------------------------------------------------------------------
+# Architecture search (src/auto_search.py)
+# ---------------------------------------------------------------------------
+search:
+  # Objective, higher is better:
+  #   score = mean_region_dice
+  #           - lambda * log(params / 1e6 + 1)
+  #           - mu     * log(GFLOPs + 1)
+  objective: dice_minus_log_params_minus_log_flops
+  lambda_grid: [0.05, 0.10, 0.15, 0.20, 0.30]
+  mu_grid:     [0.02, 0.05, 0.10, 0.15, 0.20]
+  gflops_input_shape: [1, 4, 128, 128, 128]
+
+  # Neighbourhood used by the local search
+  neighbourhood:
+    width_multipliers: [0.70, 0.80, 0.90, 1.00, 1.10, 1.20, 1.30, 1.40]
+    channel_rounding: 8         # channel counts kept divisible by 8
+    channel_min: 8
+    channel_max: 512
+    num_res_units: [0, 1, 2]
+    depth_range: [3, 5]         # number of encoder levels
+    strides: fixed_2            # stride 2 between every level
+
+  proxy_epochs: 6               # short proxy training per candidate
+  rerank_top_k: 10              # top candidates retrained for the final ranking
+
+  # Winner, written to results/search/best_spec.json
+  best_spec:
+    channels: [24, 32, 80]
+    strides: [2, 2]
+    num_res_units: 2
+
+# ---------------------------------------------------------------------------
+# Depthwise-separable variant (src/train_autobest_dsconv.py)
+# ---------------------------------------------------------------------------
+dsconv:
+  spec: ${search.best_spec}
+  # Every Conv3d inside the encoder/decoder residual blocks is replaced by
+  # depthwise (groups=in_ch) + pointwise (1x1x1). Everything else - pipeline,
+  # loss, scheduler, augmentation, split - is left identical to EE491 so the
+  # comparison is controlled.
+  replace: all_residual_block_convs
+
+# ---------------------------------------------------------------------------
+# Uncertainty estimation (src/eval_mc_dropout.py)
+# ---------------------------------------------------------------------------
+uncertainty:
+  method: mc_dropout
+  T_passes: 20                # stochastic forward passes per case
+  roi: [128, 128, 128]
+  measure: predictive_bernoulli_entropy   # per region, normalised by log(2)
+  thresholds: [0, 100, 2]     # start, stop, step - uncertainty percentiles
+  ece_bins: 15
+  spearman_subsample: 100000  # voxels sampled per case
+  num_vis_cases: 6
+  metrics:
+    # QU-BraTS (BraTS 2020 Task 3) score, reimplemented:
+    #   AUC(Dice vs T) + (1 - AUC(FTP vs T)) + (1 - AUC(FTN vs T))
+    - qu_brats
+    - ece
+    - voxel_spearman
+    - case_spearman
+
+# ---------------------------------------------------------------------------
+# Hardware the reported runs were produced on
+# ---------------------------------------------------------------------------
+environment:
+  machine: BUSIM lab GPU workstation
+  note: >
+    Wall-clock times are recorded per run in the elapsed_s column of the
+    result CSVs (roughly 4-7.5 h per 100-epoch anchor run).
