@@ -419,6 +419,7 @@ def train_one(model_name: str, model: nn.Module, n_params: int, gflops: float,
         # ---- train ----
         model.train()
         epoch_loss = 0.0
+        step = 0
         for step, batch in enumerate(train_loader, start=1):
             images = batch["image"].to(device, non_blocking=True)
             labels = batch["label"].to(device, non_blocking=True)

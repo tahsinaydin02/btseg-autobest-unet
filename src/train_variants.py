@@ -70,7 +70,7 @@ MODEL_SPECS = {
         "strides": (2, 2, 2, 2),
         "num_res_units": 2,
     },
-    "UNet-Ultralight": {
+    "UNet-UltraLite": {
         "channels": (16, 32, 64, 128),
         "strides": (2, 2, 2),
         "num_res_units": 1,
@@ -433,6 +433,7 @@ def train_one(model_name: str, spec: dict, train_loader, val_loader, max_epochs:
         # ---------------- train ----------------
         model.train()
         epoch_loss = 0.0
+        step = 0
 
         for step, batch in enumerate(train_loader, start=1):
             images = batch["image"].to(device, non_blocking=True)

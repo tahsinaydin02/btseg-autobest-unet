@@ -240,7 +240,7 @@ def get_anchor_specs_from_backend():
         raise RuntimeError("backend must define MODEL_SPECS")
     specs = {k: canonicalize_spec(v) for k, v in base.MODEL_SPECS.items()}
 
-    order = ["UNet-Baseline", "UNet-Lite", "UNet-Ultralight", "UNet-Efficient", "UNet-Tiny"]
+    order = ["UNet-Baseline", "UNet-Lite", "UNet-UltraLite", "UNet-Efficient", "UNet-Tiny"]
     anchors = []
     for name in order:
         if name in specs:
