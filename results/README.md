@@ -54,9 +54,11 @@ They contain nothing but public BraTS case identifiers.
 - `best_epoch` vs `final_epoch` — early stopping keeps the best-validation
   checkpoint; the two differ whenever the run continued past its best epoch.
 
-Dice values in `search/` are **proxy** scores from a handful of epochs, used
-only to rank candidates. They are far below converged Dice and are not
-comparable to the values in `ee491/` and `ee492/`.
+Dice values in `search/` are **proxy** scores, used only to rank candidates.
+They come from 10 epochs on a fixed 30 % subset of the training cases (2 epochs
+for the anchor placement, 6 for the lambda/mu sweep and for the rerank, which
+runs on the full split). The subset, more than the epoch budget, is why they sit
+at 0.30-0.55. They are not comparable to the values in `ee491/` and `ee492/`.
 
 ## A traceability gap worth knowing about
 

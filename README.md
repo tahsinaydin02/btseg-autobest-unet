@@ -40,7 +40,7 @@ All numbers are on a fixed 80/20 case-level split of the BraTS 2020 training set
 
 Raw per-run records, including learning-rate schedules, best/final epochs and wall-clock times, are in [`results/`](results/). The train/validation split itself is committed at [`results/splits/`](results/splits/) so the numbers can be checked against exactly the cases they were computed on.
 
-> **Empty-region convention.** Following BraTS practice, a region with no voxels in *either* the prediction or the ground truth scores Dice = 1, while a non-empty prediction against an empty ground truth scores 0. This mainly affects ET: 1 of the 74 validation cases (`BraTS20_Training_264`) has no enhancing tumour on either side and therefore contributes a 1.0 to the ET average. Three further cases score below 0.01 on ET.
+> **Empty-region convention.** Following BraTS practice, a region with no voxels in *either* the prediction or the ground truth scores Dice = 1, while a non-empty prediction against an empty ground truth scores 0. Because the rule depends on the prediction as well as the label, its effect is model-specific. Measured on the MC-dropout model in [`results/uncertainty/per_case_uncertainty.csv`](results/uncertainty/per_case_uncertainty.csv): 1 of the 74 validation cases, `BraTS20_Training_264`, has no enhancing tumour in the ground truth, and that model predicted none either, so it contributes a 1.0 to the ET average. A model that predicted any ET voxels on that case would score 0 instead. Three further cases score below 0.01 on ET.
 
 ![Accuracy vs capacity](docs/figures/pareto_params_vs_dice.png)
 
@@ -124,12 +124,13 @@ src/
   make_figures.py               # search / trade-off figures from results/*.csv
 viewer/
   BtSegViewer.py                # napari GUI: FLAIR + ground truth + prediction overlay
-configs/default.yaml            # every hyperparameter used to produce results/
+configs/default.yaml            # documented settings behind results/ (read by humans,
+                                #   not parsed by the scripts)
 results/                        # all experiment CSVs (search trials, anchors, uncertainty)
 docs/figures/                   # figures used in this README
 ```
 
-The scripts in `src/` import each other as flat sibling modules (`import train_variants as base`), which is how they were run on the lab machine. Run them from inside `src/`.
+Most scripts in `src/` import each other as flat sibling modules (`import train_variants as base`), which is how they were run on the lab machine — `train_autobest_dsconv.py` is the exception noted above. Run them from inside `src/`.
 
 ---
 
@@ -228,7 +229,7 @@ Model weights are not committed. The three trained models discussed here are pub
 - One case (`BraTS20_Training_355`) is excluded because of a filename mismatch in the released dataset, so results cover 368 of the 369 cases. The effect on aggregate Dice is negligible, but it is a difference from work that reports on all 369.
 - Single fixed 80/20 split, one seed. No cross-validation, so the differences of ~0.005 Dice between the top models are within noise and should not be read as a ranking.
 - Validation is the held-out 20 % of the BraTS 2020 *training* set. Numbers are therefore not comparable to official BraTS leaderboard scores, which use a separate hidden test set.
-- The search's proxy fidelity (a handful of epochs) ranks candidates well enough to shortlist them, but proxy Dice is far below converged Dice — see the gap between `results/search/*_trials.csv` and the final table above.
+- The search ranks candidates at low fidelity — 10 epochs **on a 30 % subset of the training cases**, the subset being the larger factor. Proxy Dice (0.30–0.55) is therefore far below converged Dice (~0.85); see the gap between `results/search/*_trials.csv` and the final table above. The top-10 rerank on the full split mitigates this, but a late-blooming architecture could still be discarded early.
 - Case-level uncertainty is weakly correlated with case-level error, so these maps support voxel-level triage, not automatic case rejection.
 
 ## Citation
