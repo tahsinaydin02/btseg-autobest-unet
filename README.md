@@ -110,9 +110,9 @@ Dropout is inserted into the compressed model and kept stochastic at inference. 
 ```
 src/
   train_variants.py             # shared engine: data, transforms, split, train loop, metrics
-                                #   imported as `base` by auto_search.py,
-                                #   train_autobest_dsconv_mc.py, eval_mc_dropout.py
-                                #   and export_preds_*.py
+                                #   imported as `base` by every other script here
+                                #   except train_autobest_dsconv.py, make_figures.py
+                                #   and plot_uncertainty_figures.py
   auto_search.py                # cost-aware architecture search + code generation
   generated_best_model_train.py # emitted by auto_search.py for the winning spec
   train_autobest_dsconv.py      # depthwise-separable variant of the winning spec
