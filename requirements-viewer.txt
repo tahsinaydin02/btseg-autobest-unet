@@ -1,0 +1,5 @@
+# Optional: only needed for viewer/BtSegViewer.py (napari GUI).
+# Install on top of requirements.txt:
+#     pip install -r requirements-viewer.txt
+napari[all]>=0.4.18
+qtpy>=2.3
