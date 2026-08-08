@@ -130,7 +130,7 @@ results/                        # all experiment CSVs (search trials, anchors, u
 docs/figures/                   # figures used in this README
 ```
 
-Most scripts in `src/` import each other as flat sibling modules (`import train_variants as base`), which is how they were run on the lab machine — `train_autobest_dsconv.py` is the exception noted above. Run them from inside `src/`.
+Most scripts in `src/` import each other as flat sibling modules (`import train_variants as base`), which is how they were run on the lab machine. The two figure scripts simply do not need the engine; `train_autobest_dsconv.py` does need it but duplicates it instead, for the reason noted above. Run them from inside `src/`.
 
 ---
 
