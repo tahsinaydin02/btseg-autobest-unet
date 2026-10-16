@@ -4,25 +4,25 @@
 
 B.Sc. graduation project (EE491/EE492), Electrical & Electronics Engineering, Boğaziçi University, June 2026.
 
-📄 **[Technical report (PDF, 5 pages)](docs/technical-report.pdf)** — method, λ–μ sensitivity analysis, full results and limitations.
+📄 **[Technical report (PDF, 5 pages)](docs/technical-report.pdf)**: method, λ–μ sensitivity analysis, full results and limitations.
 
 ![Qualitative result](docs/figures/qualitative_uncertainty.png)
 
-*FLAIR input, ground truth, prediction, and per-voxel predictive entropy for a held-out validation case. Uncertainty concentrates on the tumour boundary and on the enhancing/necrotic interface — exactly where the model's errors are.*
+*FLAIR input, ground truth, prediction, and per-voxel predictive entropy for a held-out validation case. Uncertainty concentrates on the tumour boundary and on the enhancing/necrotic interface, exactly where the model's errors are.*
 
 ---
 
 ## TL;DR
 
-A cost-aware architecture search over 3D U-Net configurations finds **UNet-AutoBest** — a 3-level network with 429 K parameters that reaches **0.852 mean region Dice**, against **0.857 for a 19.2 M-parameter baseline**. That is **45× fewer parameters for a 0.005 Dice drop**. Replacing every convolution with a depthwise-separable one shrinks it further to **100 K parameters (191× smaller, 9× fewer FLOPs)** at 0.813 Dice. MC-dropout on the compressed model yields calibrated uncertainty maps: **QU-BraTS score 2.650, ECE 0.011**.
+A cost-aware architecture search over 3D U-Net configurations finds **UNet-AutoBest**, a 3-level network with 429 K parameters that reaches **0.852 mean region Dice**, against **0.857 for a 19.2 M-parameter baseline**. That is **45× fewer parameters for a 0.005 Dice drop**. Replacing every convolution with a depthwise-separable one shrinks it further to **100 K parameters (191× smaller, 9× fewer FLOPs)** at 0.813 Dice. MC-dropout on the compressed model yields calibrated uncertainty maps: **QU-BraTS score 2.650, ECE 0.011**.
 
-**The 45× saving is in parameters, not in compute.** AutoBest's 3-level encoder downsamples less, so its feature maps stay large: it costs 24.6 GFLOPs against the baseline's 49.7 — a 2× reduction, and 2.6× *more* than the 604 K-parameter UNet-UltraLite. Storage and memory shrink by 45×; arithmetic does not. The depthwise-separable variant is where the compute saving actually lands (5.54 GFLOPs, 9× below baseline).
+**The 45× saving is in parameters, not in compute.** AutoBest's 3-level encoder downsamples less, so its feature maps stay large: it costs 24.6 GFLOPs against the baseline's 49.7. That is a 2× reduction, and 2.6× *more* than the 604 K-parameter UNet-UltraLite. Storage and memory shrink by 45×; arithmetic does not. The depthwise-separable variant is where the compute saving actually lands (5.54 GFLOPs, 9× below baseline).
 
 ---
 
 ## Results
 
-All numbers are on a fixed 80/20 case-level split of the BraTS 2020 training set (**294 train / 74 validation**), seed 42, no cross-validation. Dice is reported on the standard nested BraTS regions — whole tumour (WT), tumour core (TC), enhancing tumour (ET). GFLOPs are a forward pass at 128³ with 4 input channels.
+All numbers are on a fixed 80/20 case-level split of the BraTS 2020 training set (**294 train / 74 validation**), seed 42, no cross-validation. Dice is reported on the standard nested BraTS regions: whole tumour (WT), tumour core (TC), enhancing tumour (ET). GFLOPs are a forward pass at 128³ with 4 input channels.
 
 ### Anchors and the searched architecture
 
@@ -33,10 +33,10 @@ All numbers are on a fixed 80/20 case-level split of the BraTS 2020 training set
 | UNet-UltraLite `(16,32,64,128)` | 603,649 | 9.42 | 0.902 | 0.863 | 0.799 | 0.854 | 0.756 | 6.8 h |
 | UNet-Efficient `(16,32,64,128)`, no res-units | 489,322 | 4.57 | 0.896 | 0.854 | 0.774 | 0.841 | 0.739 | 7.6 h |
 | UNet-Tiny `(8,16,32,64)` | 123,706 | 1.49 | 0.877 | 0.819 | 0.738 | 0.811 | 0.686 | 7.4 h |
-| **UNet-AutoBest** `(24,32,80)` — *searched* | **428,553** | 24.60 | 0.901 | 0.869 | 0.786 | **0.852** | 0.757 | **4.0 h** |
-| **UNet-AutoBest-DSConv** — *depthwise separable* | **100,477** | 5.54 | 0.877 | 0.819 | 0.744 | 0.813 | 0.707 | 4.6 h |
+| **UNet-AutoBest** `(24,32,80)` (*searched*) | **428,553** | 24.60 | 0.901 | 0.869 | 0.786 | **0.852** | 0.757 | **4.0 h** |
+| **UNet-AutoBest-DSConv** (*depthwise separable*) | **100,477** | 5.54 | 0.877 | 0.819 | 0.744 | 0.813 | 0.707 | 4.6 h |
 
-> **Two Dice conventions appear in this repo, so both are given above.** *Mean region* Dice averages the nested BraTS regions WT/TC/ET and is the number to compare against the literature. *Mean class* Dice averages the three raw label classes (necrotic core, oedema, enhancing tumour) and is what the training scripts optimise and log as `best_val_mean_class_dice` — it is also the quantity plotted on the y-axis of every figure below. Region Dice is always higher because WT is an easy union of all three classes.
+> **Two Dice conventions appear in this repo, so both are given above.** *Mean region* Dice averages the nested BraTS regions WT/TC/ET and is the number to compare against the literature. *Mean class* Dice averages the three raw label classes (necrotic core, oedema, enhancing tumour) and is what the training scripts optimise and log as `best_val_mean_class_dice`. It is also the quantity plotted on the y-axis of every figure below. Region Dice is always higher because WT is an easy union of all three classes.
 
 Raw per-run records, including learning-rate schedules, best/final epochs and wall-clock times, are in [`results/`](results/). The train/validation split itself is committed at [`results/splits/`](results/splits/) so the numbers can be checked against exactly the cases they were computed on.
 
@@ -44,24 +44,24 @@ Raw per-run records, including learning-rate schedules, best/final epochs and wa
 
 ![Accuracy vs capacity](docs/figures/pareto_params_vs_dice.png)
 
-Two things stand out. First, the baseline is heavily over-parameterised for this task — UNet-Lite matches it with a quarter of the weights, and beats it on ET. Second, the searched model lands where no hand-designed anchor does: it holds UltraLite-level accuracy at 71 % of its parameters, and does so with a **3-level** encoder rather than 4, which no anchor in the sweep used.
+Two things stand out. First, the baseline is heavily over-parameterised for this task: UNet-Lite matches it with a quarter of the weights, and beats it on ET. Second, the searched model lands where no hand-designed anchor does: it holds UltraLite-level accuracy at 71 % of its parameters, and does so with a **3-level** encoder rather than 4, which no anchor in the sweep used.
 
 ### Uncertainty (MC dropout, T = 20, 74 validation cases)
 
-These numbers come from a **separately trained, dropout-enabled copy** of the DSConv model (`train_autobest_dsconv_mc.py`), not from the deterministic row above. That is why its Dice (0.818) differs slightly from the DSConv row (0.813) — different training run, same architecture and pipeline.
+These numbers come from a **separately trained, dropout-enabled copy** of the DSConv model (`train_autobest_dsconv_mc.py`), not from the deterministic row above. That is why its Dice (0.818) differs slightly from the DSConv row (0.813): different training run, same architecture and pipeline.
 
 | Metric | Value |
 |---|---:|
 | Mean region Dice | 0.818 |
 | QU-BraTS score (mean) | **2.650** |
-| — WT / TC / ET | 2.753 / 2.630 / 2.568 |
+| per region (WT / TC / ET) | 2.753 / 2.630 / 2.568 |
 | Expected calibration error | **0.011** |
 | Uncertainty–error Spearman (voxel) | 0.224 |
 | Uncertainty–error Spearman (case) | 0.114 |
 
 The QU-BraTS score is the BraTS 2020 Task 3 metric, reimplemented here as `AUC(Dice vs T) + (1 − AUC(FTP vs T)) + (1 − AUC(FTN vs T))`, where `T` sweeps uncertainty percentiles and progressively filters out the least confident voxels. A perfect score is 3.
 
-Calibration is good (ECE ≈ 1 %) and voxel-level uncertainty correlates with error, but the case-level correlation is weak (ρ = 0.11) — per-voxel entropy does **not** reliably tell you which *patient* the model got wrong. That is a known limitation of MC dropout rather than a bug, and it is the main thing worth reporting honestly here.
+Calibration is good (ECE ≈ 1 %) and voxel-level uncertainty correlates with error, but the case-level correlation is weak (ρ = 0.11). Per-voxel entropy does **not** reliably tell you which *patient* the model got wrong. That is a known limitation of MC dropout rather than a bug, and it is the main thing worth reporting honestly here.
 
 ---
 
@@ -69,7 +69,7 @@ Calibration is good (ECE ≈ 1 %) and voxel-level uncertainty correlates with er
 
 ### 1. Baselines
 
-Five hand-designed 3D U-Net variants spanning 124 K – 19.2 M parameters, all trained with an identical pipeline: RAS orientation, 1 mm isotropic resampling, non-zero z-score normalisation, foreground cropping, 128³ positive/negative-balanced random crops, flips + 90° rotations + affine jitter, `DiceCELoss`, AdamW with cosine annealing, 100 epochs max with early stopping at patience 20.
+Five hand-designed 3D U-Net variants spanning 124 K to 19.2 M parameters, all trained with an identical pipeline: RAS orientation, 1 mm isotropic resampling, non-zero z-score normalisation, foreground cropping, 128³ positive/negative-balanced random crops, flips + 90° rotations + affine jitter, `DiceCELoss`, AdamW with cosine annealing, 100 epochs max with early stopping at patience 20.
 
 ### 2. Cost-aware architecture search
 
@@ -81,23 +81,23 @@ score(a) = Dice(a) − λ · log(params(a)/1e6 + 1) − μ · log(GFLOPs(a) + 1)
 
 over a space of channel widths (multipliers 0.70–1.40, rounded to multiples of 8, strictly increasing), encoder depth (3–5 levels), and residual units per block (0–2). Strides are fixed at 2 between levels.
 
-Because `λ` and `μ` decide the whole answer, they are not guessed — the search is run over the full 5 × 5 grid `λ ∈ {0.05, 0.10, 0.15, 0.20, 0.30}` × `μ ∈ {0.02, 0.05, 0.10, 0.15, 0.20}`, with every candidate trained at short proxy fidelity, and the resulting best-spec surface is inspected directly:
+Because `λ` and `μ` decide the whole answer, they are not guessed. The search is run over the full 5 × 5 grid `λ ∈ {0.05, 0.10, 0.15, 0.20, 0.30}` × `μ ∈ {0.02, 0.05, 0.10, 0.15, 0.20}`, with every candidate trained at short proxy fidelity, and the resulting best-spec surface is inspected directly:
 
 ![lambda-mu heatmap](docs/figures/lambda_mu_heatmap.png)
 
-The surface is informative, and it is the reason the final search is run where it is. Across the 15 cells with `μ ≥ 0.10`, proxy Dice spans only 0.309–0.330 — a range of 0.021, against 0.120 in the `μ ≤ 0.05` band — and the winner collapses onto a handful of tiny networks: 12 of the 15 return `(8,16,32,64,120)`, the other three equally small 4-level variants. The FLOP penalty has swamped the accuracy term, so the objective is no longer discriminating between architectures; which one it names is close to arbitrary. Only the `μ ≤ 0.05` band trades capacity against accuracy in a useful way, and within it `λ` has a mild effect until `λ = 0.30`, where the parameter penalty starts biting (proxy Dice drops from ≈ 0.45 to 0.35–0.37 — the dark right-hand column). The final dense search therefore runs at `λ = 0.05, μ = 0.02`, the top 10 candidates are retrained at full fidelity and re-ranked, and the winner is written to [`results/search/best_spec.json`](results/search/best_spec.json):
+The surface is informative, and it is the reason the final search is run where it is. Across the 15 cells with `μ ≥ 0.10`, proxy Dice spans only 0.309–0.330 (a range of 0.021, against 0.120 in the `μ ≤ 0.05` band), and the winner collapses onto a handful of tiny networks: 12 of the 15 return `(8,16,32,64,120)`, the other three equally small 4-level variants. The FLOP penalty has swamped the accuracy term, so the objective is no longer discriminating between architectures; which one it names is close to arbitrary. Only the `μ ≤ 0.05` band trades capacity against accuracy in a useful way, and within it `λ` has a mild effect until `λ = 0.30`, where the parameter penalty starts biting: in the dark right-hand column, proxy Dice drops from ≈ 0.45 to 0.35–0.37. The final dense search therefore runs at `λ = 0.05, μ = 0.02`, the top 10 candidates are retrained at full fidelity and re-ranked, and the winner is written to [`results/search/best_spec.json`](results/search/best_spec.json):
 
 ```json
 {"channels": [24, 32, 80], "strides": [2, 2], "num_res_units": 2}
 ```
 
-Two details matter for reading the proxy numbers. Candidates are trained for only 10 epochs **and on a fixed 30 % subset of the 294 training cases**, not the full split — that combination, rather than the epoch budget alone, is why proxy Dice sits at 0.30–0.55 against a converged 0.85. The dense run evaluated 42 candidates across 6 iterations of local moves (full trace in [`results/search/final_search_trials.csv`](results/search/final_search_trials.csv)), and the top ten were then re-evaluated on the *full* training split before the final ranking — precisely because subset proxy scores are good enough to shortlist but not to order. `src/auto_search.py` then emits a standalone training script for the winning spec (`src/generated_best_model_train.py`) — the search's output is runnable code, not just a config.
+Two details matter for reading the proxy numbers. Candidates are trained for only 10 epochs **and on a fixed 30 % subset of the 294 training cases**, not the full split. That combination, rather than the epoch budget alone, is why proxy Dice sits at 0.30–0.55 against a converged 0.85. The dense run evaluated 42 candidates across 6 iterations of local moves (full trace in [`results/search/final_search_trials.csv`](results/search/final_search_trials.csv)), and the top ten were then re-evaluated on the *full* training split before the final ranking, precisely because subset proxy scores are good enough to shortlist but not to order. `src/auto_search.py` then emits a standalone training script for the winning spec (`src/generated_best_model_train.py`), so the search's output is runnable code, not just a config.
 
 ### 3. Depthwise-separable compression
 
-Every `Conv3d` inside the encoder/decoder residual blocks of the winning topology is replaced with depthwise (`groups=in_channels`) + pointwise (1×1×1) convolutions. Everything else — split, pipeline, loss, schedule, augmentation — is held fixed, so the 0.039 mean-Dice drop is attributable to the operator change alone.
+Every `Conv3d` inside the encoder/decoder residual blocks of the winning topology is replaced with depthwise (`groups=in_channels`) + pointwise (1×1×1) convolutions. Everything else (split, pipeline, loss, schedule, augmentation) is held fixed, so the 0.039 mean-Dice drop is attributable to the operator change alone.
 
-> **Note on code reuse.** `train_autobest_dsconv.py` does not import `train_variants.py`; it duplicates roughly 250 lines of the engine (data list, split, transforms, metrics, training loop). The two copies were checked and agree on every hyperparameter that affects training — loss, optimiser, scheduler, augmentation probabilities, crop sampling, split fraction — so the controlled comparison holds for the published results. But that equivalence is maintained by hand rather than enforced by the code, and would need re-checking after any edit to either file.
+> **Note on code reuse.** `train_autobest_dsconv.py` does not import `train_variants.py`; it duplicates roughly 250 lines of the engine (data list, split, transforms, metrics, training loop). The two copies were checked and agree on every hyperparameter that affects training (loss, optimiser, scheduler, augmentation probabilities, crop sampling, split fraction), so the controlled comparison holds for the published results. But that equivalence is maintained by hand rather than enforced by the code, and would need re-checking after any edit to either file.
 
 ### 4. Uncertainty estimation
 
@@ -146,11 +146,11 @@ pip install -r requirements.txt
 pip install -r requirements-viewer.txt
 ```
 
-Developed with Python 3.10 on a single CUDA GPU. The exact torch and MONAI versions used for the published runs were not recorded at the time, so `requirements.txt` gives compatible ranges rather than a verified lock file — treat it as a starting point, not a reproduction guarantee. A GPU is required for training; inference on CPU works but is slow.
+Developed with Python 3.10 on a single CUDA GPU. The exact torch and MONAI versions used for the published runs were not recorded at the time, so `requirements.txt` gives compatible ranges rather than a verified lock file. Treat it as a starting point, not a reproduction guarantee. A GPU is required for training; inference on CPU works but is slow.
 
 ## Data
 
-BraTS 2020 is **not** included in this repository and cannot be redistributed — it is released under a data use agreement that forbids it. Request access and download it yourself:
+BraTS 2020 is **not** included in this repository and cannot be redistributed: it is released under a data use agreement that forbids it. Request access and download it yourself:
 
 - Registration: <https://www.med.upenn.edu/cbica/brats2020/registration.html>
 - The training set is also mirrored on Kaggle for registered users.
@@ -220,16 +220,16 @@ python ../viewer/BtSegViewer.py
 
 ## Reproducibility
 
-Seed 42 is set for Python, NumPy, PyTorch and the DataLoader workers, and the train/validation split is written to disk so it can be reused. `STRICT_GPU_DETERMINISM` is left `False` — `cudnn.benchmark` stays on for speed, so GPU runs reproduce to within a few thousandths of Dice rather than bit-exactly. Set it to `True` in `train_variants.py` for strict determinism at a substantial speed cost.
+Seed 42 is set for Python, NumPy, PyTorch and the DataLoader workers, and the train/validation split is written to disk so it can be reused. `STRICT_GPU_DETERMINISM` is left `False`: `cudnn.benchmark` stays on for speed, so GPU runs reproduce to within a few thousandths of Dice rather than bit-exactly. Set it to `True` in `train_variants.py` for strict determinism at a substantial speed cost.
 
-Model weights are not committed. The three trained models discussed here are published under the [v1.0 release](../../releases/tag/v1.0): `UNet-AutoBest` (1.7 MB), `UNet-AutoBest-DSConv` (416 KB) and the dropout-enabled `UNet-AutoBest-DSConv-MC` (416 KB), together with the validation split. The release notes give the architecture spec of each file, which `evaluate.py` needs — a `state_dict` does not carry its own architecture.
+Model weights are not committed. The three trained models discussed here are published under the [v1.0 release](../../releases/tag/v1.0): `UNet-AutoBest` (1.7 MB), `UNet-AutoBest-DSConv` (416 KB) and the dropout-enabled `UNet-AutoBest-DSConv-MC` (416 KB), together with the validation split. The release notes give the architecture spec of each file, which `evaluate.py` needs, since a `state_dict` does not carry its own architecture.
 
 ## Limitations
 
 - One case (`BraTS20_Training_355`) is excluded because of a filename mismatch in the released dataset, so results cover 368 of the 369 cases. The effect on aggregate Dice is negligible, but it is a difference from work that reports on all 369.
 - Single fixed 80/20 split, one seed. No cross-validation, so the differences of ~0.005 Dice between the top models are within noise and should not be read as a ranking.
 - Validation is the held-out 20 % of the BraTS 2020 *training* set. Numbers are therefore not comparable to official BraTS leaderboard scores, which use a separate hidden test set.
-- The search ranks candidates at low fidelity — 10 epochs **on a 30 % subset of the training cases**, the subset being the larger factor. Proxy Dice (0.30–0.55) is therefore far below converged Dice (~0.85); see the gap between `results/search/*_trials.csv` and the final table above. The top-10 rerank on the full split mitigates this, but a late-blooming architecture could still be discarded early.
+- The search ranks candidates at low fidelity: 10 epochs **on a 30 % subset of the training cases**, the subset being the larger factor. Proxy Dice (0.30–0.55) is therefore far below converged Dice (~0.85); see the gap between `results/search/*_trials.csv` and the final table above. The top-10 rerank on the full split mitigates this, but a late-blooming architecture could still be discarded early.
 - Case-level uncertainty is weakly correlated with case-level error, so these maps support voxel-level triage, not automatic case rejection.
 
 ## Citation
